@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <exception>
 #include <iomanip>
 #include <iostream>
 #include <iterator>
@@ -6,36 +7,70 @@
 #include <ranges>
 #include <vector>
 
-#include "gexceptions.hpp"
-#include "gprinttools.hpp"
 #include "testframework.hpp"
 
 using namespace std;
 
-namespace test {
+namespace gtest {
 
-const vector<Integer> testResultsTableColumnWidths{4, 20, 10, 10, 15};
-const auto defaultTableColumnColors = vector<String>(testResultsTableColumnWidths.size(), CoutColor::Reset);
+namespace PrintColor {
+constexpr string Black{"\033[30m"};
+constexpr string Red{"\033[31m"};
+constexpr string Green{"\033[32m"};
+constexpr string Yellow{"\033[33m"};
+constexpr string Blue{"\033[34m"};
+constexpr string Magenta{"\033[35m"};
+constexpr string Cyan{"\033[36m"};
+constexpr string White{"\033[37m"};
+
+constexpr string Reset{"\033[0m"};
+} // namespace PrintColor
+
+template <typename Type> void printRowColumn(int width, const string &color, const Type &element) {
+    cout << color;
+    cout << std::setw(width) << element;
+    cout << PrintColor::Reset;
+}
+
+template <typename... Args>
+void printTableRow(const std::vector<int> &columnWidths, const std::vector<string> &colors, Args... args) {
+    ios_base::fmtflags savedCoutFlags(cout.flags());
+
+    if (sizeof...(args) != columnWidths.size() || columnWidths.size() != colors.size()) {
+        throw std::invalid_argument("Number of widths and colors must match the number of arguments!");
+    }
+
+    int columnIndex{0};
+    int colorIndex{0};
+    cout << right;
+    (printRowColumn(columnWidths[columnIndex++], colors[colorIndex++], args), ...);
+    cout << endl;
+
+    cout.flags(savedCoutFlags); // restore cout formatting
+}
+
+const vector<int> testResultsTableColumnWidths{4, 20, 10, 10, 15};
+const auto defaultTableColumnColors = vector<string>(testResultsTableColumnWidths.size(), PrintColor::Reset);
 
 void printTestResultTableHeader() {
     printTableRow(testResultsTableColumnWidths, defaultTableColumnColors, "#", "Test Name", "Checks",
                   "Failed", "Status");
 }
 
-void printTestResultTableRow(Integer testNo, const GTestResult &result) {
-    String status;
-    vector<String> colors{defaultTableColumnColors};
+void printTestResultTableRow(int testNo, const TestResult &result) {
+    string status;
+    vector<string> colors{defaultTableColumnColors};
     constexpr auto resultColumn{4};
 
     if (!result.exceptions.empty()) {
         status = "EXCEPTION";
-        colors[resultColumn] = CoutColor::Magenta;
+        colors[resultColumn] = PrintColor::Magenta;
     } else if (!result.failedChecks.empty()) {
         status = "FAILED";
-        colors[resultColumn] = CoutColor::Red;
+        colors[resultColumn] = PrintColor::Red;
     } else if (result.numberExecutedChecks > 0) {
         status = "PASSED";
-        colors[resultColumn] = CoutColor::Green;
+        colors[resultColumn] = PrintColor::Green;
     } else {
         status = "NOT PERFORMED";
     }
@@ -44,55 +79,55 @@ void printTestResultTableRow(Integer testNo, const GTestResult &result) {
                   result.failedChecks.size(), status);
 }
 
-Integer GTestFramework::numberOfExecutedChecks() const {
-    auto accExecutedChecks = [](Integer sum, const GTestBase *test) {
+int TestFramework::numberOfExecutedChecks() const {
+    auto accExecutedChecks = [](int sum, const TestBase *test) {
         return sum + test->getTestResult().numberExecutedChecks;
     };
 
     return accumulate(tests_.begin(), tests_.end(), 0, accExecutedChecks);
 }
 
-Integer GTestFramework::numberOfFailedChecks() const {
-    auto accExecutedChecks = [](Integer sum, const GTestBase *test) {
+int TestFramework::numberOfFailedChecks() const {
+    auto accExecutedChecks = [](int sum, const TestBase *test) {
         return sum + test->getTestResult().failedChecks.size();
     };
 
     return accumulate(tests_.begin(), tests_.end(), 0, accExecutedChecks);
 }
 
-auto GTestFramework::getPassedTests() const {
-    auto passedTestFilter = [](const GTestBase *test) {
-        const GTestResult &result = test->getTestResult();
+auto TestFramework::getPassedTests() const {
+    auto passedTestFilter = [](const TestBase *test) {
+        const TestResult &result = test->getTestResult();
         return (result.failedChecks.empty()) && (result.numberExecutedChecks > 0);
     };
 
     return tests_ | ranges::views::filter(passedTestFilter);
 }
 
-auto GTestFramework::getFailedTests() const {
-    auto failedTestFilter = [](const GTestBase *test) {
+auto TestFramework::getFailedTests() const {
+    auto failedTestFilter = [](const TestBase *test) {
         return test->getTestResult().failedChecks.size() > 0;
     };
 
     return tests_ | ranges::views::filter(failedTestFilter);
 }
 
-auto GTestFramework::getTestsWithExceptions() const {
-    auto exceptionFilter = [](const GTestBase *test) { return test->getTestResult().exceptions.size() > 0; };
+auto TestFramework::getTestsWithExceptions() const {
+    auto exceptionFilter = [](const TestBase *test) { return test->getTestResult().exceptions.size() > 0; };
 
     return tests_ | ranges::views::filter(exceptionFilter);
 }
 
-auto GTestFramework::getNumberOfExecutedChecks() const {
-    auto accFunc = [](auto sum, const GTestBase *test) {
+auto TestFramework::getNumberOfExecutedChecks() const {
+    auto accFunc = [](auto sum, const TestBase *test) {
         return sum + test->getTestResult().numberExecutedChecks;
     };
 
     return accumulate(tests_.begin(), tests_.end(), 0, accFunc);
 }
 
-void GTestFramework::printTestSummary() const {
-    const vector<Integer> testSummaryTableColumnWidths{20, 20, 20, 20};
+void TestFramework::printTestSummary() const {
+    const vector<int> testSummaryTableColumnWidths{20, 20, 20, 20};
 
     auto passedTests = getPassedTests();
     auto failedTests = getFailedTests();
@@ -102,11 +137,11 @@ void GTestFramework::printTestSummary() const {
     const auto noTestsWithExceptions = ranges::distance(testsWithExceptions);
     const auto noExecutedChecks = getNumberOfExecutedChecks();
 
-    const String result{numberOfFailedChecks() == 0 ? "SUCCESS!" : "FAILED"};
-    const String resultColor{numberOfFailedChecks() == 0 ? CoutColor::Green : CoutColor::Red};
+    const string result{numberOfFailedChecks() == 0 ? "SUCCESS!" : "FAILED"};
+    const string resultColor{numberOfFailedChecks() == 0 ? PrintColor::Green : PrintColor::Red};
 
     cout << endl;
-    cout << "TEST SUMMARY: " << resultColor << result << CoutColor::Reset << endl;
+    cout << "TEST SUMMARY: " << resultColor << result << PrintColor::Reset << endl;
     cout << "  " << noExecutedChecks << " checks executed for " << tests_.size() << " test cases." << endl;
     if (noFailedTests > 0) {
         cout << "  " << noPassedTests << " passed tests " << noFailedTests << " failed tests." << endl;
@@ -117,7 +152,7 @@ void GTestFramework::printTestSummary() const {
     cout << endl;
 
     for (auto *test : failedTests) {
-        const GTestResult &result = test->getTestResult();
+        const TestResult &result = test->getTestResult();
 
         for (auto check : result.failedChecks) {
             cout << "# Failed: " << test->getTestName() << " check " << check.checkNumber << " ("
@@ -126,7 +161,7 @@ void GTestFramework::printTestSummary() const {
     }
 
     for (auto *test : testsWithExceptions) {
-        const GTestResult &result = test->getTestResult();
+        const TestResult &result = test->getTestResult();
 
         for (auto except : result.exceptions) {
             cout << "# Exception: " << test->getTestName() << except << endl;
@@ -136,7 +171,7 @@ void GTestFramework::printTestSummary() const {
     cout << endl << endl;
 }
 
-void GTestFramework::executeTests() {
+void TestFramework::executeTests() {
     printTestResultTableHeader();
 
     for (auto test : tests_) {
@@ -148,12 +183,12 @@ void GTestFramework::executeTests() {
     printTestSummary();
 }
 
-void GTestBase::execute() {
+void TestBase::execute() {
     try {
         testBody();
-    } catch (const GException &exception) {
-        testResult_.exceptions.emplace_back(GExceptionInfo{exception});
+    } catch (const std::exception &exception) {
+        testResult_.exceptions.emplace_back(ExceptionInfo{exception});
     }
 }
 
-} // namespace test
+} // namespace gtest

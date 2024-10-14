@@ -11,55 +11,69 @@
 
 #include <iostream>
 #include <sstream>
+#include <string>
 #include <type_traits>
 #include <vector>
 
-#include "gbasictypes.hpp"
-#include "gexceptions.hpp"
-#include "gtypetools.hpp"
-
 #pragma once
 
-namespace test {
+namespace gtest {
+
+struct ExceptionInfo {
+    explicit ExceptionInfo(const std::exception &e) : message{e.what()}, type{typeid(e).name()} {}
+
+    std::string message;
+    std::string type;
+};
+
+constexpr std::ostream &operator<<(std::ostream &os, const ExceptionInfo &gei) {
+    os << gei.type << '(' << gei.message << ')';
+    return os;
+};
+
+constexpr std::ostream &operator<<(std::ostream &os, const std::exception &exception) {
+    os << exception.what();
+    return os;
+};
 
 /**
  * @brief Holds information about failed checks.
  */
 struct FailedCheck {
 
-    FailedCheck(Integer checkNr, const String &name, const String &message)
+    FailedCheck(int checkNr, const std::string &name, const std::string &message)
         : checkNumber{checkNr}, checkName{name}, failMessage{message} {}
 
-    Integer checkNumber = 0;
-    String checkName;
-    String failMessage;
+    int checkNumber = 0;
+    std::string checkName;
+    std::string failMessage;
 };
 
 /**
  * @brief Holds the results of a test case.
  */
-struct GTestResult {
-    String testName;
-    Integer numberExecutedChecks = 0;
+struct TestResult {
+    std::string testName;
+    int numberExecutedChecks = 0;
     std::vector<FailedCheck> failedChecks;
-    std::vector<GExceptionInfo> exceptions;
+    std::vector<ExceptionInfo> exceptions;
 };
 
-class GTestBase;
+class TestBase;
 
 /**
  * @brief Implements a simple test framework where test cases can be registered
  * and executed. The results are sent to cout.
  */
-class GTestFramework {
+class TestFramework {
   public:
     /**
      * @brief Gives a reference to the singleton instance of the test framework
      *
-     * @return GTestFramework&
+     * @return TestFramework&
      */
-    constexpr static GTestFramework &getInstance() {
-        static GTestFramework instance;
+    constexpr static TestFramework &getInstance() {
+        static TestFramework instance;
         return instance;
     }
 
@@ -69,7 +83,7 @@ class GTestFramework {
      *
      * @param test
      */
-    constexpr void registerTest(GTestBase &test) { tests_.push_back(&test); }
+    constexpr void registerTest(TestBase &test) { tests_.push_back(&test); }
 
     /**
      * @brief Executes registered test cases.
@@ -77,11 +91,11 @@ class GTestFramework {
     void executeTests();
 
   private:
-    GTestFramework() {}
-    GTestFramework(const GTestFramework &) = delete;
+    TestFramework() {}
+    TestFramework(const TestFramework &) = delete;
 
-    Integer numberOfExecutedChecks() const;
-    Integer numberOfFailedChecks() const;
+    int numberOfExecutedChecks() const;
+    int numberOfFailedChecks() const;
     auto getPassedTests() const;
     auto getFailedTests() const;
     auto getTestsWithExceptions() const;
@@ -89,25 +103,25 @@ class GTestFramework {
 
     void printTestSummary() const;
 
-    Integer numberOfExecutedTests_ = 0;
-    Integer numberOfFailedTests_ = 0;
-    std::vector<GTestBase *> tests_;
+    int numberOfExecutedTests_ = 0;
+    int numberOfFailedTests_ = 0;
+    std::vector<TestBase *> tests_;
 };
 
 /**
  * @brief The base class for test cases.
  *
  */
-class GTestBase {
+class TestBase {
   public:
     /**
-     * @brief Construct a new GTestBase object and registers it in the test
+     * @brief Construct a new TestBase object and registers it in the test
      * framework.
      *
      * @param testName The name of the test case.
      * @param fw A reference to the test framework
      */
-    GTestBase(const String &testName, GTestFramework &fw) : framework_{fw.getInstance()} {
+    TestBase(const std::string &testName, TestFramework &fw) : framework_{fw.getInstance()} {
         framework_.registerTest(*this);
         testResult_.testName = testName;
     }
@@ -126,19 +140,19 @@ class GTestBase {
     /**
      * @brief Get the name of the test case.
      */
-    constexpr const String &getTestName() const { return testResult_.testName; }
+    constexpr const std::string &getTestName() const { return testResult_.testName; }
 
     /**
      * @brief Get the results of the test case.
      */
-    constexpr const GTestResult &getTestResult() const { return testResult_; }
+    constexpr const TestResult &getTestResult() const { return testResult_; }
 
   private:
-    GTestBase() = delete;
-    GTestBase(const GTestBase &) = delete;
+    TestBase() = delete;
+    TestBase(const TestBase &) = delete;
 
-    GTestFramework &framework_;
-    GTestResult testResult_;
+    TestFramework &framework_;
+    TestResult testResult_;
 
   protected:
     /**
@@ -150,19 +164,19 @@ class GTestBase {
      * @param result The result from the test.
      * @param expected The expected result of the test.
      */
-    template <typename Type> constexpr void GCHECK(const String &name, Type result, Type expected) {
+    template <typename Type> constexpr void GCHECK(const std::string &name, Type result, Type expected) {
         testResult_.numberExecutedChecks++;
 
         if (result != expected) {
             std::stringstream failMessage;
-            failMessage << "Result: " << typeToString(result) << " | Expected: " << typeToString(expected);
+            failMessage << std::boolalpha << "Result: " << result << " | Expected: " << expected;
             testResult_.failedChecks.emplace_back(
                 FailedCheck{testResult_.numberExecutedChecks, name, failMessage.str()});
         }
     }
 
     template <typename Type> constexpr void GCHECK(Type result, Type expected) {
-        GCHECK(String{""}, result, expected);
+        GCHECK(std::string{""}, result, expected);
     }
 };
 
@@ -191,15 +205,15 @@ class GTestBase {
  * @endcode
  */
 #define GTEST(TestName)                                                                                      \
-    class TestName##Test : public GTestBase {                                                                \
+    class TestName##Test : public gtest::TestBase {                                                          \
       public:                                                                                                \
-        TestName##Test(const String &n, GTestFramework &fw) : GTestBase{n, fw} {}                            \
+        TestName##Test(const std::string &n, gtest::TestFramework &fw) : TestBase{n, fw} {}                  \
                                                                                                              \
         void testBody() override;                                                                            \
     };                                                                                                       \
                                                                                                              \
-    static TestName##Test TestName##Instance(#TestName, GTestFramework::getInstance());                      \
+    static TestName##Test TestName##Instance(#TestName, gtest::TestFramework::getInstance());                \
                                                                                                              \
     void TestName##Test::testBody()
 
-} // namespace test
+} // namespace gtest
