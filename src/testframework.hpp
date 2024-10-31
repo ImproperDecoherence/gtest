@@ -178,6 +178,28 @@ class TestBase {
     template <typename Type> constexpr void GCHECK(Type result, Type expected) {
         GCHECK(std::string{""}, result, expected);
     }
+
+    /**
+     * @brief Performs a check to see that the given parameters are within +/- tolerance/2.
+     *
+     * @tparam Type Any type that has the <, >, + and - opertors.
+     * @param result The result from the test.
+     * @param expected The expected result of the test.
+     * @param tolerance The expected tolerance.
+     */
+    template <typename Type>
+    constexpr void GCHECKT(const std::string &name, Type result, Type expected, Type tolerance) {
+        testResult_.numberExecutedChecks++;
+
+        if ((result < (expected - tolerance / 2)) || (result > (expected + tolerance / 2))) {
+            std::stringstream failMessage;
+            failMessage << std::boolalpha << "Result: " << result << " | Expected: " << expected
+                        << " | Tolerance: " << tolerance;
+            ;
+            testResult_.failedChecks.emplace_back(
+                FailedCheck{testResult_.numberExecutedChecks, name, failMessage.str()});
+        }
+    }
 };
 
 /**
