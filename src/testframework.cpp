@@ -49,7 +49,7 @@ void printTableRow(const std::vector<int> &columnWidths, const std::vector<strin
     cout.flags(savedCoutFlags); // restore cout formatting
 }
 
-const vector<int> testResultsTableColumnWidths{4, 20, 10, 10, 15};
+const vector<int> testResultsTableColumnWidths{4, 30, 10, 10, 15};
 const auto defaultTableColumnColors = vector<string>(testResultsTableColumnWidths.size(), PrintColor::Reset);
 
 void printTestResultTableHeader() {
