@@ -5,8 +5,10 @@ param (
     [switch]$compile,
     [switch]$help,
     [switch]$test,
+    [switch]$app,
     [switch]$doc,
-    [switch]$debug
+    [switch]$release,
+    [switch]$wipe
 )
 
 # Function to display help
@@ -17,12 +19,13 @@ function Show-Help {
     Write-Host "  -clean      Clean the build directory."
     Write-Host "  -rebuild    Rebuild the build directory."
     Write-Host "  -compile    Compile the project."
-    Write-Host "  -test       Compile and run the tests."
+    Write-Host "  -test       Run the tests."
+    Write-Host "  -app        Run the application."
     Write-Host "  -doc        Generate Doxygen documentaion."
-    Write-Host "  -debug      Build debug project."
+    Write-Host "  -release    Build release project."
     Write-Host "  -help       Show this help message."
+    Write-Host "  -wipe       Wipes the build directory."
     Write-Host ""
-    Write-Host "If no options are provided, the script will perform the default actions: clean, rebuild, and compile."
 }
 
 # Function to get the current build type from Meson configuration
@@ -39,8 +42,16 @@ function Get-BuildType {
 }
 
 # Function to setup the Meson build directory
-function MesonSetup([string]$buildtype = "release") {
+function MesonSetup([string]$buildtype = "debugoptimized") {
     meson setup builddir --buildtype=$buildtype
+}
+
+# Function to wipe the build directory
+function Wipe {
+    if (Test-Path -Path builddir) {
+        Write-Host "Removing build directory..."
+        Remove-Item -Recurse -Force builddir
+    }
 }
 
 # Function to clean the build directory
@@ -55,23 +66,23 @@ function Rebuild {
     $currentBuildType = Get-BuildType
     if ($null -eq $currentBuildType) {
         Write-Host "Build directory does not exist. Setting up a new build directory."
-        if ($debug) {
-            MesonSetup "debug"
-        }
-        else {
+        if ($release) {            
             MesonSetup "release"
         }
+        else {
+            MesonSetup "debugoptimized"
+        }
     }
-    elseif (($debug -and $currentBuildType -ne "debug") -or (-not $debug -and $currentBuildType -eq "debug")) {
+    elseif (($release -and $currentBuildType -ne "release") -or (-not $release -and $currentBuildType -eq "release")) {
         Write-Host "Current build type is $currentBuildType. Rebuilding for the correct build type..."
         if (Test-Path -Path builddir) {
             Remove-Item -Recurse -Force builddir
         }
-        if ($debug) {
-            MesonSetup "debug"
-        }
-        else {
+        if ($release) {
             MesonSetup "release"
+        }
+        else {            
+            MesonSetup "debugoptimized"
         }
     }
     else {
@@ -81,6 +92,10 @@ function Rebuild {
 
 # Function to compile the project
 function Compile {
+    if (-not (Test-Path -Path builddir)) {
+        Rebuild
+    }
+
     Write-Host "Compiling the project..."
     meson compile -C builddir
 
@@ -92,8 +107,14 @@ function Compile {
 
 # Function to run the tests
 function Test {
-    Write-Host "No tests are implemented!"
-    #./builddir/runtests.exe
+    Write-Host "Running the tests..."
+    ./builddir/run_tests.exe
+}
+
+# Function to run the application
+function App {
+    Write-Host "Running the application..."
+    ./builddir/gchordlabs.exe
 }
 
 # Function generate Doxygen documentation
@@ -112,6 +133,12 @@ if ($clean) {
     Clean
 }
 
+
+if ($wipe) {
+    Wipe
+}
+
+
 if ($rebuild) {
     Rebuild
 }
@@ -124,15 +151,17 @@ if ($test) {
     Test
 }
 
+if ($app) {
+    App
+}
+
 if ($doc) {
     Write-Doxygen
 }
 
 
 # Default action if no flags are provided
-if (-not ($clean -or $rebuild -or $compile -or $test -or $doc)) {
-    Write-Host "No flags provided. Performing default actions: clean, rebuild, and compile."
-    Clean
-    Rebuild
-    Compile
+if (-not ($clean -or $rebuild -or $compile -or $test -or $doc -or $wipe)) {
+    Write-Host "No flags provided."
+    Show-Help
 }

@@ -5,7 +5,7 @@ add_project_arguments('-fmax-errors=1', language: 'cpp')
 gtest_includes = include_directories('src')
 
 gtest_sources = [
-    'src/testframework.cpp',
+    'src/g_test_framework.cpp',
 ]
 
 gtest_lib = static_library('gtest', gtest_sources, include_directories: gtest_includes)
